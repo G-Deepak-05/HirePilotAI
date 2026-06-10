@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.20.xsd">
+
+    <changeSet id="V2-create-resumes" author="hirepilot">
+        <createTable tableName="resumes">
+            <column name="id" type="UUID" defaultValueComputed="gen_random_uuid()">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="user_id" type="UUID">
+                <constraints nullable="false"
+                             foreignKeyName="fk_resumes_user"
+                             references="users(id)"/>
+            </column>
+            <column name="original_filename" type="VARCHAR(512)"/>
+            <column name="raw_text" type="TEXT"/>
+            <column name="parsed_data" type="JSONB"/>
+            <column name="skills" type="TEXT[]"/>
+            <column name="experience_years" type="DECIMAL(4,1)"/>
+            <column name="qdrant_vector_id" type="VARCHAR(255)"/>
+            <column name="parsing_status" type="VARCHAR(50)" defaultValue="PENDING"/>
+            <column name="created_at" type="TIMESTAMPTZ" defaultValueComputed="NOW()">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="TIMESTAMPTZ" defaultValueComputed="NOW()">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <createIndex tableName="resumes" indexName="idx_resumes_user_id">
+            <column name="user_id"/>
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>

@@ -1,0 +1,50 @@
+# ─── Java / Maven ──────────────────────────────────────────────────────
+target/
+*.class
+*.jar
+*.war
+*.ear
+.mvn/wrapper/maven-wrapper.jar
+!**/src/main/**/target/
+!**/src/test/**/target/
+
+# ─── Spring Boot ───────────────────────────────────────────────────────
+*.log
+logs/
+spring.log
+
+# ─── Node / Next.js ────────────────────────────────────────────────────
+node_modules/
+.next/
+out/
+dist/
+.npm
+*.tsbuildinfo
+next-env.d.ts
+
+# ─── Environment ───────────────────────────────────────────────────────
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# ─── HirePilot Data ────────────────────────────────────────────────────
+~/.hirepilot/
+
+# ─── OS ────────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+
+# ─── IDE ───────────────────────────────────────────────────────────────
+.idea/
+*.iml
+.vscode/
+*.code-workspace
+
+# ─── Docker volumes (if using local bind mounts) ───────────────────────
+postgres-data/
+kafka-data/
+qdrant-data/

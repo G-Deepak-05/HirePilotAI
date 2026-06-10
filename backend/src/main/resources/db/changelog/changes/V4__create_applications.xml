@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.20.xsd">
+
+    <changeSet id="V4-create-applications" author="hirepilot">
+        <createTable tableName="applications">
+            <column name="id" type="UUID" defaultValueComputed="gen_random_uuid()">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="job_id" type="UUID">
+                <constraints nullable="false"
+                             foreignKeyName="fk_applications_job"
+                             references="jobs(id)"/>
+            </column>
+            <column name="user_id" type="UUID">
+                <constraints nullable="false"
+                             foreignKeyName="fk_applications_user"
+                             references="users(id)"/>
+            </column>
+            <column name="status" type="VARCHAR(50)" defaultValue="QUEUED">
+                <constraints nullable="false"/>
+            </column>
+            <!-- QUEUED | TAILORING | PENDING_CONFIRMATION | APPLYING | APPLIED | ASSESSMENT | INTERVIEW | OFFER | REJECTED | FAILED -->
+            <column name="match_score" type="DECIMAL(5,2)"/>
+            <column name="tailored_resume_path" type="VARCHAR(1024)"/>
+            <column name="cover_letter_path" type="VARCHAR(1024)"/>
+            <column name="tailored_resume_text" type="TEXT"/>
+            <column name="cover_letter_text" type="TEXT"/>
+            <column name="screening_answers" type="JSONB"/>
+            <column name="applied_at" type="TIMESTAMPTZ"/>
+            <column name="confirmation_token" type="VARCHAR(255)"/>
+            <column name="failure_reason" type="TEXT"/>
+            <column name="notes" type="TEXT"/>
+            <column name="created_at" type="TIMESTAMPTZ" defaultValueComputed="NOW()">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="TIMESTAMPTZ" defaultValueComputed="NOW()">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <createIndex tableName="applications" indexName="idx_applications_user_status">
+            <column name="user_id"/>
+            <column name="status"/>
+        </createIndex>
+        <createIndex tableName="applications" indexName="idx_applications_job_id">
+            <column name="job_id"/>
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>
