@@ -1,17 +1,25 @@
 package com.hirepilot.controller;
 
 import com.hirepilot.domain.Job;
+import com.hirepilot.domain.Application;
 import com.hirepilot.repository.JobRepository;
+import com.hirepilot.repository.ApplicationRepository;
+import com.hirepilot.repository.PrepSheetRepository;
 import com.hirepilot.service.JobScraperService;
 import com.hirepilot.service.MatchingEngineService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/jobs")
@@ -19,22 +27,86 @@ import java.util.UUID;
 public class JobController {
 
     private final JobRepository jobRepository;
+    private final ApplicationRepository applicationRepository;
+    private final PrepSheetRepository prepSheetRepository;
     private final JobScraperService jobScraperService;
     private final MatchingEngineService matchingEngineService;
 
     /**
-     * GET /api/jobs?page=0&size=20
-     * Returns paginated list of active jobs.
+     * GET /api/jobs?page=0&size=20&userId=...
+     * Returns paginated list of active jobs, sorted by match score descending if userId is provided.
      */
     @GetMapping
     public ResponseEntity<Page<JobResponse>> getJobs(
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size) {
+            @RequestParam(defaultValue = "20") int size,
+            @RequestParam(required = false) UUID userId) {
 
-        Page<Job> jobs = jobRepository.findByIsActiveTrue(
-                PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "scrapedAt")));
+        if (userId == null) {
+            Page<Job> jobs = jobRepository.findByIsActiveTrue(
+                    PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "scrapedAt")));
+            return ResponseEntity.ok(jobs.map(JobResponse::from));
+        }
 
-        return ResponseEntity.ok(jobs.map(JobResponse::from));
+        // Fetch active jobs and user applications
+        List<Job> activeJobs = jobRepository.findByIsActiveTrue();
+        List<Application> userApps = applicationRepository.findByUserId(userId);
+        
+        // Map jobId -> Application for O(1) checks
+        Map<UUID, Application> jobIdToAppMap = userApps.stream()
+                .collect(Collectors.toMap(app -> app.getJob().getId(), app -> app, (a, b) -> a));
+
+        List<JobResponse> enrichedJobs = activeJobs.stream()
+                .map(job -> {
+                    Double matchScore = null;
+                    try {
+                        MatchingEngineService.MatchResult scoreResult = matchingEngineService.computeMatchScore(userId, job.getId());
+                        matchScore = scoreResult.totalScore().doubleValue();
+                    } catch (Exception e) {
+                        // Safe fallback for no resume
+                    }
+
+                    Application app = jobIdToAppMap.get(job.getId());
+                    String status = app != null ? app.getStatus().name() : null;
+                    UUID appId = app != null ? app.getId() : null;
+
+                    return new JobResponse(
+                            job.getId(), job.getTitle(), job.getCompany(), job.getSource(),
+                            job.getUrl(), job.getLocation(), job.getIsRemote(),
+                            job.getSalaryMin(), job.getSalaryMax(),
+                            job.getRequiredSkills(), job.getExperienceLevel(),
+                            job.getScrapedAt() != null ? job.getScrapedAt().toString() : null,
+                            matchScore,
+                            status,
+                            appId
+                    );
+                })
+                .sorted((a, b) -> {
+                    double scoreA = a.matchScore() != null ? a.matchScore() : 0.0;
+                    double scoreB = b.matchScore() != null ? b.matchScore() : 0.0;
+                    return Double.compare(scoreB, scoreA);
+                })
+                .toList();
+
+        int start = Math.min(page * size, enrichedJobs.size());
+        int end = Math.min(start + size, enrichedJobs.size());
+        List<JobResponse> subList = enrichedJobs.subList(start, end);
+
+        PageImpl<JobResponse> pageResult = new PageImpl<>(subList, PageRequest.of(page, size), enrichedJobs.size());
+        return ResponseEntity.ok(pageResult);
+    }
+
+    /**
+     * DELETE /api/jobs/clear
+     * Clears all jobs, applications, and prep sheets to start fresh.
+     */
+    @DeleteMapping("/clear")
+    @Transactional
+    public ResponseEntity<Map<String, String>> clearJobs() {
+        prepSheetRepository.deleteAllInBatch();
+        applicationRepository.deleteAllInBatch();
+        jobRepository.deleteAllInBatch();
+        return ResponseEntity.ok(Map.of("message", "Job queue cleared successfully"));
     }
 
     /**
@@ -52,9 +124,9 @@ public class JobController {
      * Manually triggers a Greenhouse board scrape.
      */
     @PostMapping("/scrape/greenhouse/{companySlug}")
-    public ResponseEntity<String> scrapeGreenhouse(@PathVariable String companySlug) {
+    public ResponseEntity<Map<String, String>> scrapeGreenhouse(@PathVariable String companySlug) {
         jobScraperService.scrapeGreenhouseBoard(companySlug);
-        return ResponseEntity.ok("Scrape initiated for: " + companySlug);
+        return ResponseEntity.ok(Map.of("message", "Scrape initiated for: " + companySlug));
     }
 
     /**
@@ -62,37 +134,37 @@ public class JobController {
      * Manually triggers a YC Jobs scrape.
      */
     @PostMapping("/scrape/yc")
-    public ResponseEntity<String> scrapeYC() {
+    public ResponseEntity<Map<String, String>> scrapeYC() {
         jobScraperService.scrapeYCJobs();
-        return ResponseEntity.ok("YC Jobs scrape initiated");
+        return ResponseEntity.ok(Map.of("message", "YC Jobs scrape initiated"));
     }
 
     /** POST /api/jobs/scrape/remotive — remote software-dev jobs feed */
     @PostMapping("/scrape/remotive")
-    public ResponseEntity<String> scrapeRemotive() {
+    public ResponseEntity<Map<String, String>> scrapeRemotive() {
         jobScraperService.scrapeRemotive();
-        return ResponseEntity.ok("Remotive scrape initiated");
+        return ResponseEntity.ok(Map.of("message", "Remotive scrape initiated"));
     }
 
     /** POST /api/jobs/scrape/remoteok — remote engineering jobs feed */
     @PostMapping("/scrape/remoteok")
-    public ResponseEntity<String> scrapeRemoteOK() {
+    public ResponseEntity<Map<String, String>> scrapeRemoteOK() {
         jobScraperService.scrapeRemoteOK();
-        return ResponseEntity.ok("RemoteOK scrape initiated");
+        return ResponseEntity.ok(Map.of("message", "RemoteOK scrape initiated"));
     }
 
     /** POST /api/jobs/scrape/jobicy — remote US engineering jobs */
     @PostMapping("/scrape/jobicy")
-    public ResponseEntity<String> scrapeJobicy() {
+    public ResponseEntity<Map<String, String>> scrapeJobicy() {
         jobScraperService.scrapeJobicy();
-        return ResponseEntity.ok("Jobicy scrape initiated");
+        return ResponseEntity.ok(Map.of("message", "Jobicy scrape initiated"));
     }
 
     /** POST /api/jobs/scrape/all — fires all 5 sources at once */
     @PostMapping("/scrape/all")
-    public ResponseEntity<String> scrapeAll() {
+    public ResponseEntity<Map<String, String>> scrapeAll() {
         jobScraperService.runDailyScrape();
-        return ResponseEntity.ok("All sources scrape initiated: YC Jobs, Greenhouse (manual), Remotive, RemoteOK, Jobicy");
+        return ResponseEntity.ok(Map.of("message", "All sources scrape initiated: YC Jobs, Greenhouse (manual), Remotive, RemoteOK, Jobicy"));
     }
 
     /**
@@ -121,7 +193,10 @@ public class JobController {
             String url, String location, Boolean isRemote,
             Integer salaryMin, Integer salaryMax,
             String[] requiredSkills, String experienceLevel,
-            String scrapedAt
+            String scrapedAt,
+            Double matchScore,
+            String applicationStatus,
+            UUID applicationId
     ) {
         static JobResponse from(Job j) {
             return new JobResponse(
@@ -129,7 +204,8 @@ public class JobController {
                     j.getUrl(), j.getLocation(), j.getIsRemote(),
                     j.getSalaryMin(), j.getSalaryMax(),
                     j.getRequiredSkills(), j.getExperienceLevel(),
-                    j.getScrapedAt() != null ? j.getScrapedAt().toString() : null
+                    j.getScrapedAt() != null ? j.getScrapedAt().toString() : null,
+                    null, null, null
             );
         }
     }

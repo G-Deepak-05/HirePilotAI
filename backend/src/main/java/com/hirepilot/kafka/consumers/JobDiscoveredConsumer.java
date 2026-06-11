@@ -22,10 +22,7 @@ import static com.hirepilot.config.KafkaConfig.TOPIC_JOB_DISCOVERED;
 public class JobDiscoveredConsumer {
 
     private final MatchingEngineService matchingEngineService;
-
-    // Single-user mode: fixed user ID retrieved from config or DB
-    // In production expand to: userRepository.findAll().forEach(user -> evaluate(user, jobId))
-    private static final String DEFAULT_USER_ID_PLACEHOLDER = "00000000-0000-0000-0000-000000000001";
+    private final com.hirepilot.repository.UserRepository userRepository;
 
     @KafkaListener(topics = TOPIC_JOB_DISCOVERED, groupId = "matching-engine-group")
     public void onJobDiscovered(JobDiscoveredEvent event) {
@@ -33,9 +30,14 @@ public class JobDiscoveredConsumer {
 
         try {
             UUID jobId = UUID.fromString(event.getJobId());
-            // Evaluate against the single local user's profile
-            // TODO: Replace with actual user ID lookup from user table
-            // matchingEngineService.evaluateAndRoute(userId, jobId);
+            // Evaluate against all users in the system (e.g. onboarded user or placeholder)
+            userRepository.findAll().forEach(user -> {
+                try {
+                    matchingEngineService.evaluateAndRoute(user.getId(), jobId);
+                } catch (Exception ex) {
+                    log.error("Failed to evaluate job {} for user {}", jobId, user.getId(), ex);
+                }
+            });
             log.debug("Matching evaluation complete for job: {}", event.getJobId());
         } catch (Exception e) {
             log.error("Failed to process job-discovered event for job {}", event.getJobId(), e);

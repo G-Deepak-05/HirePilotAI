@@ -118,7 +118,26 @@ public class JobScraperService {
                 @SuppressWarnings("unchecked")
                 List<Map<String, Object>> jobs = (List<Map<String, Object>>) response.getOrDefault("jobs", List.of());
                 log.info("Greenhouse[{}] returned {} listings", companySlug, jobs.size());
-                jobs.forEach(j -> processGreenhouseJob(j, companySlug));
+                
+                // Fetch detail for each job to populate descriptions
+                for (Map<String, Object> j : jobs) {
+                    try {
+                        Object jobId = j.get("id");
+                        if (jobId != null) {
+                            Map<String, Object> detail = client.get()
+                                    .uri("/v1/boards/{slug}/jobs/{id}", companySlug, jobId)
+                                    .retrieve()
+                                    .bodyToMono(new ParameterizedTypeReference<Map<String, Object>>() {})
+                                    .block();
+                            if (detail != null) {
+                                j.put("content", detail.get("content"));
+                            }
+                        }
+                    } catch (Exception ex) {
+                        log.warn("Failed to fetch detail for Greenhouse job {}: {}", j.get("id"), ex.getMessage());
+                    }
+                    processGreenhouseJob(j, companySlug);
+                }
             }
         } catch (WebClientResponseException e) {
             log.error("Greenhouse[{}] HTTP {}: {}", companySlug, e.getStatusCode(), e.getMessage());
@@ -135,13 +154,26 @@ public class JobScraperService {
             @SuppressWarnings("unchecked")
             Map<String, Object> location = (Map<String, Object>) raw.getOrDefault("location", Map.of());
 
+            String locationName = str(location, "name");
+            String title = str(raw, "title", "Unknown");
+            boolean isRemote = locationName.toLowerCase().contains("remote") ||
+                               title.toLowerCase().contains("remote");
+
+            String htmlContent = str(raw, "content");
+            String jdText = "";
+            if (!htmlContent.isBlank()) {
+                jdText = htmlContent.replaceAll("(?s)<[^>]*>", " ").replaceAll("\\s+", " ").trim();
+            }
+
             Job job = Job.builder()
-                    .title(str(raw, "title", "Unknown"))
+                    .title(title)
                     .company(companySlug)
                     .source("GREENHOUSE")
                     .url(url)
                     .urlHash(hashUrl(url))
-                    .location(str(location, "name"))
+                    .location(locationName)
+                    .isRemote(isRemote)
+                    .jdText(jdText)
                     .build();
 
             saveJobIfNew(job);

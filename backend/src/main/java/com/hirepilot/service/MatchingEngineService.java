@@ -114,6 +114,17 @@ public class MatchingEngineService {
         }
     }
 
+    @Transactional
+    public void forceQueueApplication(UUID userId, UUID jobId) {
+        Optional<Application> existing = applicationRepository.findByUserIdAndJobId(userId, jobId);
+        if (existing.isPresent()) {
+            log.info("Application already exists for user {} and job {}", userId, jobId);
+            return;
+        }
+        MatchResult result = computeMatchScore(userId, jobId);
+        createQueuedApplication(userId, jobId, result);
+    }
+
     private void createQueuedApplication(UUID userId, UUID jobId, MatchResult result) {
         User user = userRepository.getReferenceById(userId);
         Job job   = jobRepository.getReferenceById(jobId);
@@ -141,18 +152,61 @@ public class MatchingEngineService {
     // ─── Score Component Computations ────────────────────────────────────────
 
     private double computeSkillScore(Resume resume, Job job) {
-        if (resume.getSkills() == null || job.getRequiredSkills() == null) return 50.0;
+        if (resume.getSkills() == null || resume.getSkills().length == 0) return 50.0;
 
-        Set<String> resumeSkills = new HashSet<>(Arrays.asList(resume.getSkills()));
-        Set<String> jobSkills    = new HashSet<>(Arrays.asList(job.getRequiredSkills()));
+        Set<String> resumeSkills = new HashSet<>();
+        for (String s : resume.getSkills()) {
+            resumeSkills.add(s.trim());
+        }
 
-        if (jobSkills.isEmpty()) return 70.0; // No specific skills required → neutral
+        Set<String> jobSkills = new HashSet<>();
+        if (job.getRequiredSkills() != null) {
+            for (String s : job.getRequiredSkills()) {
+                jobSkills.add(s.trim());
+            }
+        }
 
-        long matches = resumeSkills.stream()
-                .filter(s -> jobSkills.stream().anyMatch(js -> js.equalsIgnoreCase(s)))
-                .count();
+        // Scan the job description for resume skills
+        Set<String> jdSkillsFound = new HashSet<>();
+        if (job.getJdText() != null && !job.getJdText().isBlank()) {
+            String jdLower = job.getJdText().toLowerCase();
+            for (String skill : resumeSkills) {
+                String skillLower = skill.toLowerCase();
+                if (jdLower.contains(skillLower)) {
+                    jdSkillsFound.add(skill);
+                }
+            }
+        }
 
-        return Math.min(100.0, (double) matches / jobSkills.size() * 100.0);
+        // Clean out generic or empty skills from jobSkills list
+        jobSkills.removeIf(s -> s.equalsIgnoreCase("Software Engineering") || s.equalsIgnoreCase("Development") || s.isBlank());
+
+        if (jobSkills.isEmpty() && jdSkillsFound.isEmpty()) {
+            return 50.0; // neutral
+        }
+
+        double skillMatchRatio = 0.0;
+        if (!jobSkills.isEmpty()) {
+            long matches = jobSkills.stream()
+                    .filter(js -> resumeSkills.stream().anyMatch(rs ->
+                        rs.equalsIgnoreCase(js) ||
+                        rs.toLowerCase().contains(js.toLowerCase()) ||
+                        js.toLowerCase().contains(rs.toLowerCase())
+                    ))
+                    .count();
+            skillMatchRatio = (double) matches / jobSkills.size();
+        }
+
+        // If candidate matches e.g. 5 or more skills found in JD, they get a high score
+        double jdSkillsScore = jdSkillsFound.isEmpty() ? 0.0 : Math.min(100.0, jdSkillsFound.size() * 20.0);
+
+        if (!jobSkills.isEmpty() && !jdSkillsFound.isEmpty()) {
+            return (skillMatchRatio * 100.0 * 0.6) + (jdSkillsScore * 0.4);
+        } else if (!jobSkills.isEmpty()) {
+            return skillMatchRatio * 100.0;
+        } else {
+            return jdSkillsScore;
+        }
     }
 
     private double computeExperienceScore(Resume resume, Job job) {
@@ -178,7 +232,7 @@ public class MatchingEngineService {
         String resumeLower = resume.getRawText().toLowerCase();
         String jdLower = job.getJdText().toLowerCase();
 
-        // Extract significant keywords from JD (simple tokenisation; can be improved with NLP)
+        // Extract significant keywords from JD
         String[] jdWords = jdLower.split("[^a-zA-Z0-9+#.]+");
         long totalWords = Arrays.stream(jdWords)
                 .filter(w -> w.length() > 4)
@@ -193,7 +247,9 @@ public class MatchingEngineService {
                 .filter(resumeLower::contains)
                 .count();
 
-        return Math.min(100.0, (double) matchedWords / totalWords * 100.0);
+        double ratio = (double) matchedWords / totalWords;
+        // Since resumes are much shorter, overlap of 30% is a near-perfect match
+        return Math.min(100.0, (ratio / 0.3) * 100.0);
     }
 
     private double computeLocationScore(User user, Job job) {

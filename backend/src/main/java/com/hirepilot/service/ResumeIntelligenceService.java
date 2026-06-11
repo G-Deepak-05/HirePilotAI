@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.hirepilot.config.OllamaConfig;
 import com.hirepilot.domain.Resume;
 import com.hirepilot.domain.User;
+import com.hirepilot.repository.JobRepository;
 import com.hirepilot.repository.ResumeRepository;
 import com.hirepilot.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -28,6 +29,8 @@ public class ResumeIntelligenceService {
 
     private final ResumeRepository resumeRepository;
     private final UserRepository userRepository;
+    private final JobRepository jobRepository;
+    private final MatchingEngineService matchingEngineService;
     private final OllamaConfig ollamaConfig;
     private final ObjectMapper objectMapper;
 
@@ -110,13 +113,29 @@ public class ResumeIntelligenceService {
             resume.setSkills(skills);
             resume.setExperienceYears(expYears);
             resume.setParsingStatus(Resume.ParsingStatus.COMPLETED);
+            resume = resumeRepository.save(resume);
             log.info("Resume parsed successfully: {} skills extracted, {} years experience", skills.length, expYears);
+
+            // Trigger matching against all existing active jobs
+            try {
+                log.info("Triggering matching for user {} against all existing active jobs", userId);
+                jobRepository.findByIsActiveTrue().forEach(job -> {
+                    try {
+                        matchingEngineService.evaluateAndRoute(userId, job.getId());
+                    } catch (Exception ex) {
+                        log.error("Failed to evaluate job {} for user {}", job.getId(), userId, ex);
+                    }
+                });
+            } catch (Exception ex) {
+                log.error("Failed to execute matching process for user {}", userId, ex);
+            }
         } catch (Exception e) {
             log.error("Failed to parse resume with Ollama", e);
             resume.setParsingStatus(Resume.ParsingStatus.FAILED);
+            resume = resumeRepository.save(resume);
         }
 
-        return resumeRepository.save(resume);
+        return resume;
     }
 
     private String extractText(MultipartFile file) throws IOException, org.apache.tika.exception.TikaException {

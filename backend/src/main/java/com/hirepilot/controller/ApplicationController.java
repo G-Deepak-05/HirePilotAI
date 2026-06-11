@@ -78,6 +78,20 @@ public class ApplicationController {
     }
 
     /**
+     * POST /api/applications/queue
+     * Manually queue a job for application.
+     */
+    @PostMapping("/queue")
+    public ResponseEntity<ApplicationResponse> queueJob(
+            @RequestParam UUID userId,
+            @RequestParam UUID jobId) {
+        matchingEngineService.forceQueueApplication(userId, jobId);
+        return applicationRepository.findByUserIdAndJobId(userId, jobId)
+                .map(app -> ResponseEntity.ok(ApplicationResponse.from(app)))
+                .orElse(ResponseEntity.internalServerError().build());
+    }
+
+    /**
      * PATCH /api/applications/{id}/status
      * Manually move a Kanban card.
      * Body: { "status": "INTERVIEW" }
@@ -127,11 +141,11 @@ public class ApplicationController {
      * Triggers matching evaluation + queues the application pipeline for an existing job.
      */
     @PostMapping("/evaluate")
-    public ResponseEntity<String> evaluateJob(
+    public ResponseEntity<Map<String, String>> evaluateJob(
             @RequestParam UUID userId,
             @RequestParam UUID jobId) {
         matchingEngineService.evaluateAndRoute(userId, jobId);
-        return ResponseEntity.ok("Evaluation triggered");
+        return ResponseEntity.ok(Map.of("message", "Evaluation triggered"));
     }
 
     // ─── DTOs ─────────────────────────────────────────────────────────────────

@@ -7,6 +7,7 @@ interface JobCardProps {
   job: Job;
   matchScore?: number;
   onEvaluate?: (jobId: string) => void;
+  onQueueApply?: (jobId: string) => void;
 }
 
 const SOURCE_COLORS: Record<string, string> = {
@@ -17,10 +18,20 @@ const SOURCE_COLORS: Record<string, string> = {
   DEFAULT:    'text-slate-400 bg-slate-400/10',
 };
 
-export default function JobCard({ job, matchScore, onEvaluate }: JobCardProps) {
+const STATUS_COLORS: Record<string, string> = {
+  QUEUED: 'text-amber-400 bg-amber-400/10 border-amber-400/20',
+  TAILORING: 'text-indigo-400 bg-indigo-400/10 border-indigo-500/20',
+  PENDING_CONFIRMATION: 'text-yellow-400 bg-yellow-400/10 border-yellow-400/20',
+  APPLYING: 'text-blue-400 bg-blue-400/10 border-blue-400/20',
+  APPLIED: 'text-green-400 bg-green-400/10 border-green-400/20',
+  FAILED: 'text-red-400 bg-red-400/10 border-red-400/20',
+};
+
+export default function JobCard({ job, matchScore, onEvaluate, onQueueApply }: JobCardProps) {
   const sourceColor = SOURCE_COLORS[job.source] ?? SOURCE_COLORS.DEFAULT;
-  const scoreColor = matchScore != null
-    ? matchScore >= 80 ? 'text-green-400' : matchScore >= 60 ? 'text-yellow-400' : 'text-red-400'
+  const finalScore = matchScore ?? job.matchScore;
+  const scoreColor = finalScore != null
+    ? finalScore >= 70 ? 'text-green-400' : finalScore >= 50 ? 'text-yellow-400' : 'text-red-400'
     : '';
 
   return (
@@ -82,22 +93,28 @@ export default function JobCard({ job, matchScore, onEvaluate }: JobCardProps) {
 
       {/* Footer */}
       <div className="flex items-center justify-between pt-3 border-t border-white/5">
-        {matchScore != null ? (
-          <span className={`text-sm font-bold ${scoreColor}`}>{Math.round(matchScore)}% match</span>
+        {finalScore != null ? (
+          <span className={`text-sm font-bold ${scoreColor}`}>{Math.round(finalScore)}% match</span>
         ) : (
           <span className="text-[11px] text-slate-600">
             {job.scrapedAt ? new Date(job.scrapedAt).toLocaleDateString() : ''}
           </span>
         )}
 
-        <div className="flex gap-2">
-          {onEvaluate && (
-            <button
-              onClick={() => onEvaluate(job.id)}
-              className="text-[11px] px-3 py-1.5 rounded-lg bg-indigo-600/20 text-indigo-300 border border-indigo-500/20 hover:bg-indigo-600/30 transition-colors"
-            >
-              Match Me
-            </button>
+        <div className="flex gap-2 items-center">
+          {job.applicationStatus ? (
+            <span className={`text-[10px] font-medium px-2 py-1 rounded-lg border ${STATUS_COLORS[job.applicationStatus] ?? 'text-slate-400 bg-slate-400/10 border-slate-500/20'}`}>
+              {job.applicationStatus.replace('_', ' ')}
+            </span>
+          ) : (
+            onQueueApply && (
+              <button
+                onClick={() => onQueueApply(job.id)}
+                className="text-[11px] px-3 py-1.5 rounded-lg bg-indigo-600 text-white hover:bg-indigo-500 transition-colors font-medium shadow-sm hover:shadow-indigo-500/20 whitespace-nowrap"
+              >
+                Queue Apply
+              </button>
+            )
           )}
           <a
             href={job.url}

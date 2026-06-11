@@ -15,6 +15,7 @@ public interface ApplicationRepository extends JpaRepository<Application, UUID> 
     List<Application> findByUserId(UUID userId);
     List<Application> findByUserIdAndStatus(UUID userId, ApplicationStatus status);
     Optional<Application> findByConfirmationToken(String token);
+    Optional<Application> findByUserIdAndJobId(UUID userId, UUID jobId);
 
     @Query("SELECT a FROM Application a WHERE a.user.id = :userId ORDER BY a.createdAt DESC")
     List<Application> findByUserIdOrderByCreatedAtDesc(UUID userId);

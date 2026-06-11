@@ -100,8 +100,8 @@ qdrant:
 # ─── HirePilot Business Config ───────────────────────────────────
 hirepilot:
   matching:
-    auto-apply-threshold: 80
-    manual-review-threshold: 60
+    auto-apply-threshold: 70
+    manual-review-threshold: 50
     weights:
       skills: 0.4
       experience: 0.3

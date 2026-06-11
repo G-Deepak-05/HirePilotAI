@@ -6,10 +6,6 @@ import JobCard from '@/components/JobCard';
 import { Search, RefreshCw, Zap, Building2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { toast } from 'sonner';
 
-const USER_ID = typeof window !== 'undefined'
-  ? localStorage.getItem('hirepilot_user_id') ?? ''
-  : '';
-
 export default function JobsPage() {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [loading, setLoading] = useState(true);
@@ -17,13 +13,21 @@ export default function JobsPage() {
   const [totalPages, setTotalPages] = useState(0);
   const [search, setSearch] = useState('');
   const [ghSlug, setGhSlug] = useState('');
+  const [userId, setUserId] = useState('');
 
-  useEffect(() => { loadJobs(); }, [page]);
+  useEffect(() => {
+    const id = localStorage.getItem('hirepilot_user_id') ?? '';
+    setUserId(id);
+  }, []);
+
+  useEffect(() => {
+    loadJobs();
+  }, [page, userId]);
 
   async function loadJobs() {
     setLoading(true);
     try {
-      const res = await api.jobs.list(page, 20);
+      const res = await api.jobs.list(page, 20, userId || undefined);
       setJobs(res.content);
       setTotalPages(res.totalPages);
     } catch {
@@ -74,13 +78,25 @@ export default function JobsPage() {
     }
   }
 
-  async function handleEvaluate(jobId: string) {
-    if (!USER_ID) { toast.warning('Complete onboarding first'); return; }
+  async function handleQueueApply(jobId: string) {
+    if (!userId) { toast.warning('Complete onboarding first'); return; }
     try {
-      const score = await api.jobs.computeMatch(jobId, USER_ID);
-      toast.success(`Match score: ${Math.round(score.totalScore)}% — Skills: ${Math.round(score.skillScore)}%, Exp: ${Math.round(score.experienceScore)}%`);
+      await api.applications.queue(userId, jobId);
+      toast.success('🚀 Job added to apply queue! Optimization started.');
+      loadJobs();
     } catch (e: any) {
-      toast.error(e.message);
+      toast.error('Failed to queue: ' + e.message);
+    }
+  }
+
+  async function handleClearAll() {
+    if (!confirm('Are you sure you want to clear all jobs, applications, and prep sheets? This cannot be undone.')) return;
+    try {
+      await api.jobs.clearAll();
+      toast.success('Job queue and all applications cleared successfully.');
+      loadJobs();
+    } catch (e: any) {
+      toast.error('Failed to clear queue: ' + e.message);
     }
   }
 
@@ -129,6 +145,10 @@ export default function JobsPage() {
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl btn-glow text-white text-xs font-semibold">
             <Zap className="w-3.5 h-3.5" /> Scrape All
           </button>
+          <button onClick={handleClearAll}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-red-500/10 text-red-400 border border-red-500/20 text-xs font-semibold hover:bg-red-500/20 transition-colors whitespace-nowrap ml-auto">
+            Clear Queue
+          </button>
         </div>
         <div className="flex items-center gap-2">
           <div className="flex-1 flex items-center gap-2 bg-[#1c1c28] border border-white/10 rounded-xl px-3 py-2">
@@ -175,7 +195,7 @@ export default function JobsPage() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {filtered.map(job => (
-            <JobCard key={job.id} job={job} onEvaluate={USER_ID ? handleEvaluate : undefined} />
+            <JobCard key={job.id} job={job} onQueueApply={userId ? handleQueueApply : undefined} />
           ))}
         </div>
       )}

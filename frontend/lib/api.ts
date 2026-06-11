@@ -48,6 +48,9 @@ export interface Job {
   requiredSkills: string[];
   experienceLevel: string;
   scrapedAt: string;
+  matchScore?: number;
+  applicationStatus?: string;
+  applicationId?: string;
 }
 
 export interface Application {
@@ -81,11 +84,24 @@ export type ApplicationStatus =
 export interface KanbanBoard {
   PENDING_CONFIRMATION: Application[];
   APPLIED: Application[];
+  SHORTLISTED?: Application[];
   ASSESSMENT: Application[];
-  INTERVIEW: Application[];
+  ROUND_1?: Application[];
+  ROUND_1_CLEARED?: Application[];
+  ROUND_2?: Application[];
+  ROUND_2_CLEARED?: Application[];
+  ROUND_3?: Application[];
+  ROUND_3_CLEARED?: Application[];
+  HR_ROUND?: Application[];
+  WAITING_FOR_HR?: Application[];
   OFFER: Application[];
+  OFFER_ACCEPTED?: Application[];
+  OFFER_DECLINED?: Application[];
   REJECTED: Application[];
+  GHOSTED?: Application[];
+  WITHDRAWN?: Application[];
   FAILED: Application[];
+  INTERVIEW?: Application[]; // fallback for any generic interview key
 }
 
 export interface PrepSheet {
@@ -134,12 +150,13 @@ export const api = {
   },
 
   jobs: {
-    list: (page = 0, size = 20) => request<{ content: Job[]; totalElements: number; totalPages: number }>(`/api/jobs?page=${page}&size=${size}`),
+    list: (page = 0, size = 20, userId?: string) => request<{ content: Job[]; totalElements: number; totalPages: number }>(`/api/jobs?page=${page}&size=${size}${userId ? `&userId=${userId}` : ''}`),
     get: (id: string) => request<Job>(`/api/jobs/${id}`),
-    scrapeYC: () => request<string>('/api/jobs/scrape/yc', { method: 'POST' }),
-    scrapeGreenhouse: (slug: string) => request<string>(`/api/jobs/scrape/greenhouse/${slug}`, { method: 'POST' }),
+    scrapeYC: () => request<{ message: string }>('/api/jobs/scrape/yc', { method: 'POST' }),
+    scrapeGreenhouse: (slug: string) => request<{ message: string }>(`/api/jobs/scrape/greenhouse/${slug}`, { method: 'POST' }),
     computeMatch: (jobId: string, userId: string) =>
       request<MatchScore>(`/api/jobs/${jobId}/match/${userId}`, { method: 'POST' }),
+    clearAll: () => request<{ message: string }>('/api/jobs/clear', { method: 'DELETE' }),
   },
 
   applications: {
@@ -162,7 +179,9 @@ export const api = {
         body: JSON.stringify({ notes }),
       }),
     evaluate: (userId: string, jobId: string) =>
-      request<string>(`/api/applications/evaluate?userId=${userId}&jobId=${jobId}`, { method: 'POST' }),
+      request<{ message: string }>(`/api/applications/evaluate?userId=${userId}&jobId=${jobId}`, { method: 'POST' }),
+    queue: (userId: string, jobId: string) =>
+      request<Application>(`/api/applications/queue?userId=${userId}&jobId=${jobId}`, { method: 'POST' }),
   },
 
   prep: {

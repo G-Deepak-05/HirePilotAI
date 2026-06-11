@@ -16,6 +16,7 @@ public interface JobRepository extends JpaRepository<Job, UUID> {
     boolean existsByUrlHash(String urlHash);
     Optional<Job> findByUrlHash(String urlHash);
     Page<Job> findByIsActiveTrue(Pageable pageable);
+    List<Job> findByIsActiveTrue();
     List<Job> findBySourceAndIsActiveTrue(String source);
 
     @Query("SELECT j FROM Job j WHERE j.isActive = true ORDER BY j.scrapedAt DESC")
