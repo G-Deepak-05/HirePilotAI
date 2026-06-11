@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.20.xsd">
+
+    <changeSet id="V3-create-jobs" author="hirepilot">
+        <createTable tableName="jobs">
+            <column name="id" type="UUID" defaultValueComputed="gen_random_uuid()">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="title" type="VARCHAR(512)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="company" type="VARCHAR(255)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="jd_text" type="TEXT"/>
+            <column name="source" type="VARCHAR(100)"/>
+            <column name="url" type="VARCHAR(2048)">
+                <constraints nullable="false" unique="true"/>
+            </column>
+            <column name="url_hash" type="VARCHAR(64)">
+                <constraints nullable="false" unique="true"/>
+            </column>
+            <column name="location" type="VARCHAR(255)"/>
+            <column name="is_remote" type="BOOLEAN" defaultValueBoolean="false"/>
+            <column name="salary_min" type="INTEGER"/>
+            <column name="salary_max" type="INTEGER"/>
+            <column name="required_skills" type="TEXT[]"/>
+            <column name="experience_level" type="VARCHAR(50)"/>
+            <column name="qdrant_vector_id" type="VARCHAR(255)"/>
+            <column name="scraped_at" type="TIMESTAMPTZ" defaultValueComputed="NOW()">
+                <constraints nullable="false"/>
+            </column>
+            <column name="expires_at" type="TIMESTAMPTZ"/>
+            <column name="is_active" type="BOOLEAN" defaultValueBoolean="true"/>
+        </createTable>
+
+        <createIndex tableName="jobs" indexName="idx_jobs_company">
+            <column name="company"/>
+        </createIndex>
+        <createIndex tableName="jobs" indexName="idx_jobs_source">
+            <column name="source"/>
+        </createIndex>
+        <createIndex tableName="jobs" indexName="idx_jobs_scraped_at">
+            <column name="scraped_at"/>
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>

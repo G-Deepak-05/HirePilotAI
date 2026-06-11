@@ -1,0 +1,19 @@
+#!/bin/sh
+# ----------------------------------------------------------------------------
+# Maven Start Up Batch script (POSIX shell)
+# ----------------------------------------------------------------------------
+
+if [ -z "$JAVA_HOME" ] ; then
+  JAVACMD=`which java`
+else
+  JAVACMD="$JAVA_HOME/bin/java"
+fi
+
+# Find the project base dir
+MAVEN_PROJECTBASEDIR=`pwd`
+
+exec "$JAVACMD" \
+  -classpath "$MAVEN_PROJECTBASEDIR/.mvn/wrapper/maven-wrapper.jar" \
+  "-Dmaven.home=${MAVEN_HOME}" \
+  "-Dmaven.multiModuleProjectDirectory=${MAVEN_PROJECTBASEDIR}" \
+  org.apache.maven.wrapper.MavenWrapperMain "$@"

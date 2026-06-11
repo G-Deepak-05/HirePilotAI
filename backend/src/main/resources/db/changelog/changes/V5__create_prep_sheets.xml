@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.20.xsd">
+
+    <changeSet id="V5-create-prep-sheets" author="hirepilot">
+        <createTable tableName="prep_sheets">
+            <column name="id" type="UUID" defaultValueComputed="gen_random_uuid()">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="application_id" type="UUID">
+                <constraints nullable="false"
+                             foreignKeyName="fk_prep_application"
+                             references="applications(id)"/>
+            </column>
+            <column name="technical_questions" type="JSONB"/>
+            <column name="system_design_scenarios" type="JSONB"/>
+            <column name="behavioral_questions" type="JSONB"/>
+            <column name="company_research" type="TEXT"/>
+            <column name="generation_status" type="VARCHAR(50)" defaultValue="PENDING"/>
+            <column name="created_at" type="TIMESTAMPTZ" defaultValueComputed="NOW()">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <createIndex tableName="prep_sheets" indexName="idx_prep_sheets_application_id">
+            <column name="application_id"/>
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>
